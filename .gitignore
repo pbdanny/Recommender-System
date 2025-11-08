@@ -16,13 +16,18 @@ htmlcov/
 .mypy_cache/
 
 # DVC-specific files and directories
-.dvc/cache/ # DVC's local cache for data files
-*.dvc # DVC metadata files should be tracked by Git
-*.dvcignore # DVC's ignore file should be tracked by Git
-data/ # Example: if your raw data is in a 'data/' directory and managed by DVC
+.dvc/cache/ 
+# DVC's local cache for data files
+*.dvc 
+# DVC metadata files should be tracked by Git
+*.dvcignore
+# DVC's ignore file should be tracked by Git
+data/
+# Example: if your raw data is in a 'data/' directory and managed by DVC
 
 # MLflow-specific files and directories
-mlruns/ # MLflow experiment tracking data
+mlruns/
+# MLflow experiment tracking data
 
 # Operating system and editor files
 .DS_Store
