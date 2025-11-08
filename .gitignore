@@ -1,0 +1,35 @@
+# Python-specific files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-arg.txt
+.tox/
+.coverage
+.pytest_cache/
+htmlcov/
+.ipynb_checkpoints
+.mypy_cache/
+
+# DVC-specific files and directories
+.dvc/cache/ # DVC's local cache for data files
+*.dvc # DVC metadata files should be tracked by Git
+*.dvcignore # DVC's ignore file should be tracked by Git
+data/ # Example: if your raw data is in a 'data/' directory and managed by DVC
+
+# MLflow-specific files and directories
+mlruns/ # MLflow experiment tracking data
+
+# Operating system and editor files
+.DS_Store
+.vscode/
+*.log
+*.tmp
+*~
+
+# Jupyter Notebook files (optional, if you use Jupyter and want to ignore outputs)
+.ipynb_checkpoints/

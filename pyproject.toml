@@ -1,0 +1,20 @@
+[project]
+name = "qa-reccom"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "bentoml>=1.4.28",
+    "dvc>=3.63.0",
+    "fastapi>=0.121.0",
+    "httpx>=0.28.1",
+    "locust>=2.42.2",
+    "mlflow>=3.6.0",
+    "numpy<2",
+    "pandas>=2.3.3",
+    "redis>=7.0.1",
+    "scikit-learn>=1.7.2",
+    "scikit-surprise>=1.1.4",
+    "uvicorn>=0.38.0",
+]
