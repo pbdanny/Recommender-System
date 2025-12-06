@@ -1,0 +1,41 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  # 1. Your MLflow Model Registry
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.6.0
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_SERVER_DEFAULT_ARTIFACT_ROOT=file:///mlflow/artifacts
+    volumes:
+      - ./mlflow-data:/mlflow:Z,U
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --host 0.0.0.0
+      --port 5000
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
+  # 2. Your Monitoring Stack
+  prometheus:
+    image: docker.io/prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:Z,U
+      
+  grafana:
+    image: docker.io/grafana/grafana:latest
+    ports:
+      - "3001:3000" # Use 3001 locally to avoid clash
+    volumes:
+      - ./grafana-data:/var/lib/grafana:Z,U
+
+  # 3. Your Candidate Cache (KEY for scaling)
+  redis:
+    image: docker.io/redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data:Z,U

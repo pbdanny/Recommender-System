@@ -27,6 +27,9 @@ data/
 
 # MLflow-specific files and directories
 mlruns/
+
+# MLflow artifacts and data
+mlflow-data/
 # MLflow experiment tracking data
 
 # Operating system and editor files
@@ -38,3 +41,9 @@ mlruns/
 
 # Jupyter Notebook files (optional, if you use Jupyter and want to ignore outputs)
 .ipynb_checkpoints/
+
+# Grafana data directory
+grafana-data/
+
+# Radis data directory
+redis-data/

@@ -11,6 +11,14 @@ from collections import defaultdict
 from surprise import Dataset, Reader, SVD, accuracy
 from surprise.model_selection import train_test_split
 
+# --- HELPER: Detect Environment ---
+def get_redis_host():
+    # If running inside a container (env var set), use service name 'redis'
+    # If running locally (VSCode), use 'localhost'
+    if os.environ.get('AM_I_IN_A_DOCKER_CONTAINER'):
+        return 'redis'
+    return 'localhost'
+
 def is_running_in_docker_env_var():
     return os.environ.get('AM_I_IN_A_DOCKER_CONTAINER') == 'Yes'
 
@@ -22,24 +30,30 @@ data = Dataset.load_from_file('../data/u.data', reader=reader)
 trainset, testset = train_test_split(data, test_size=0.25)
 
 # --- 2. Log with MLflow ---
-# print("Connecting to MLflow at http://localhost:5000")
-# mlflow.set_tracking_uri("http://localhost:5000")
 
-# Define MLflow tracking location
-MLFLOW_TRACKING_DIR = "../mlruns"
-mlflow_tracking_path = os.path.abspath(MLFLOW_TRACKING_DIR)
-mlflow_tracking_uri = f"file://{os.path.abspath(MLFLOW_TRACKING_DIR)}"
-EXPERIMENT_NAME = "Hybrid_RecSys"
-mlflow.set_tracking_uri(mlflow_tracking_uri) 
+# --- 2.1 MLflow tracking local
+# MLFLOW_TRACKING_DIR = "../mlruns"
+# mlflow_tracking_path = os.path.abspath(MLFLOW_TRACKING_DIR)
+# mlflow_tracking_uri = f"file://{os.path.abspath(MLFLOW_TRACKING_DIR)}"
+# EXPERIMENT_NAME = "Hybrid_RecSys"
+# mlflow.set_tracking_uri(mlflow_tracking_uri) 
+# mlflow.set_experiment(EXPERIMENT_NAME)
+
+# --- 2.2 MLflow tracking server
+MLFLOW_TRACKING_URI = "http://localhost:5000"
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+EXPERIMENT_NAME = "Hybrid_RecSys_v2"
 mlflow.set_experiment(EXPERIMENT_NAME)
 
 with mlflow.start_run() as run:
     # Create the SVD model
     params = {"n_factors": 50, "n_epochs": 20, "lr_all": 0.005, "reg_all": 0.02}
     algo = SVD(**params)
+    # Train
+    algo.fit(trainset)
 
     # Define a custom pyfunc model wrapper
-    class SurpriseRecommenderWrapper(mlflow.pyfunc.PythonModel):
+    class SurpriseWrapper(mlflow.pyfunc.PythonModel):
         def load_context(self, context):
             import pickle
             with open(context.artifacts["model_path"], "rb") as f:
@@ -51,17 +65,15 @@ with mlflow.start_run() as run:
                 self.model.predict(uid=row["user"], iid=row["item"]).est
                 for _, row in model_input.iterrows()
             ]
-            return preds
-    
-    # Train
-    algo.fit(trainset)
+            return preds    
     
     print(f"Logging model to MLflow in experiment '{EXPERIMENT_NAME}'...")
 
     # Dump model as pickle before for mlflow to log
     model_path = "model_surprise.pkl"
    
-    with open(model_path, "wb") as f:
+    # Save raw model
+    with open("model.pkl", "wb") as f:
         pickle.dump(algo, f)
  
     # Input should be a sample DataFrame, not a 'trainset' object
@@ -71,8 +83,8 @@ with mlflow.start_run() as run:
     signature = infer_signature(input_example, output_example)
     
     mlflow.pyfunc.log_model(name="svd_candidate_model",
-                            python_model = SurpriseRecommenderWrapper(), 
-                            artifacts={"model_path": model_path},
+                            python_model = SurpriseWrapper(), 
+                            artifacts={"model_path": "model.pkl"},
                             signature=signature)
     
     mlflow.log_params(params)    
@@ -84,7 +96,10 @@ with mlflow.start_run() as run:
     rmse = accuracy.rmse(predictions)    
     mlflow.log_metric("rmse", rmse)
     
-# --- 3. Load best model and generate candidates for ALL users ---
+    # print(f"Model logged to: runs:/{run.info.run_id}/model")
+    # model_uri = f"runs:/{run.info.run_id}/model"
+    
+# --- 3. BATCH Prediction : Load best model and generate candidates for ALL users ---
 
 # --- 3.1 Locate the production model and load ---
 client = mlflow.tracking.MlflowClient()
@@ -101,26 +116,7 @@ if not models:
 
 latest_model = models[0]
 latest_model_id = latest_model.model_id
-
-# Check if running in Docker
-if is_running_in_docker_env_var():
-    # 1. Get the absolute path to the tracking dir *inside the container*
-    # This will resolve to "/app/mlflow_tracking"
-    container_tracking_path = os.path.abspath(MLFLOW_TRACKING_DIR)
-
-    # 2. Construct the correct, container-local model URI
-    # The required path is: file://<container_path>/<experiment_id>/models/{model_id}/artifacts
-    model_uri = (
-        f"file://{container_tracking_path}/"
-        f"{experiment.experiment_id}/models/{latest_model_id}/artifacts/"
-        )
-    
-else:
-    # If not in Docker, use the standard MLflow model URI
-    model_uri = (
-        f"file://{mlflow_tracking_path}/"
-        f"{experiment.experiment_id}/models/{latest_model_id}/artifacts/"
-        )
+model_uri = latest_model.artifact_location
 
 # --- 3.2. Generate Candidates for ALL users ---
 print("Generating candidates...")
@@ -130,45 +126,34 @@ model = mlflow.pyfunc.load_model(model_uri)
 
 all_items = [trainset.to_raw_iid(i) for i in trainset.all_items()]
 all_users = [trainset.to_raw_uid(u) for u in trainset.all_users()]
+# Just do one user for demo speed (User 196)
+demo_users = ['196', '186']
 
-# In a real system, you'd use a faster batch-prediction method
-candidates = defaultdict(list)
-for uid in all_users:
-    # Create a DataFrame for batch prediction
-    predict_df = pd.DataFrame({
-        'user': [uid] * len(all_items),
-        'item': all_items
-    })
-
-    # FIX 1: Assign the prediction results to a new column
-    # -----------------------------------------------------------------
-    # model.predict() returns a list/Series of scores
+candidates = {}
+for uid in demo_users:
+    # 1. Create prediction DataFrame
+    predict_df = pd.DataFrame({'user': [uid]*len(all_items), 'item': all_items})
+    
+    # 2. Predict (Returns list of floats)
     scores = model.predict(predict_df)
     
-    # Add scores as a new column
-    predict_df['prediction'] = scores
+    # 3. FIX: Assign scores back to DataFrame to sort
+    predict_df['score'] = scores
+    
+    # 4. Sort and take top 500
+    top_items = predict_df.sort_values('score', ascending=False).head(500)['item'].tolist()
+    candidates[uid] = top_items
+    
+# --- 4. CACHE TO REDIS ---
+redis_host = get_redis_host()
+print(f"Connecting to Redis at {redis_host}...")
 
-    # Now, sort the DATAFRAME by the 'prediction' column
-    top_k = predict_df.sort_values(by='prediction', ascending=False).head(500)
-
-    # And now you can safely access the 'item' column
-    candidates[uid] = top_k['item'].tolist()
-    # -----------------------------------------------------------------
-
-# --- 3. Populate Redis Cache ---
-print("Connecting to Redis cache at http://localhost:6379")
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-
-print(f"Populating cache with {len(candidates)} users...")
-with r.pipeline() as pipe:
-    for user_id, item_list in candidates.items():
-        # The key is "rec:batch:USER_ID"
-        # The value is a JSON list of item IDs
-        key = f"rec:batch:{user_id}"
-        value = json.dumps(item_list)
-        pipe.set(key, value)
-    pipe.execute()
-
-print("Batch job complete. Candidates are in Redis.")
-
-r.get("rec:batch:15")  # Example to fetch candidates for user "15"
+try:
+    r = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
+    with r.pipeline() as pipe:
+        for uid, items in candidates.items():
+            pipe.set(f"rec:batch:{uid}", json.dumps(items))
+        pipe.execute()
+    print("Success: Candidates cached in Redis.")
+except redis.ConnectionError:
+    print(f"FATAL: Could not connect to Redis at {redis_host}. Check podman-compose ps.")

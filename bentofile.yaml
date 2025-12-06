@@ -1,0 +1,9 @@
+service: "src.service:HybridRecSys"
+description: "Hybrid RecSys"
+include:
+ - "src/service.py"
+python:
+  packages: ["redis", "pandas", "bentoml"]
+envs:
+  - name: REDIS_HOST
+    value: "redis" # Default for container deployment
