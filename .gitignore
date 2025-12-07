@@ -14,14 +14,15 @@ pip-delete-this-arg.txt
 htmlcov/
 .ipynb_checkpoints
 .mypy_cache/
+*.egg-info/
 
 # DVC's ignore file should be tracked by Git
 *.dvcignore
 # DVC metadata files should be tracked by Git
-data/
-!data/*.dvc
-!data/**/*.dvc
-# Example: if your raw data is in a 'data/' directory and managed by DVC
+/data/raw/*
+/data/processed/*
+/models/*.pkl
+!/data/.gitkeep
 
 # MLflow-specific files and directories
 mlruns/

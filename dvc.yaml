@@ -1,0 +1,41 @@
+stages:
+  preprocess:
+    cmd: uv run python src/data/preprocessing.py
+    deps:
+      - src/data/preprocessing.py
+      - data/raw
+    params:
+      - preprocess.train_size
+      - preprocess.random_state
+    outs:
+      - data/processed/trainset.pkl
+      - data/processed/testset.pkl
+
+  train:
+    cmd: uv run python src/models/batch_train.py
+    deps:
+      - src/models/batch_train.py
+      - data/processed/trainset.pkl
+    params:
+      - train.n_factors
+      - train.n_epochs
+      - train.lr_all
+      - train.reg_all
+    outs:
+      - models/model.pkl
+    metrics:
+      - metrics.json:
+          cache: false
+
+  # evaluate:
+  #   cmd: uv run python src/models/evaluate.py
+  #   deps:
+  #     - src/models/evaluate.py
+  #     - models/model.pkl
+  #     - data/processed/test.csv
+  #   metrics:
+  #     - results/metrics.json:
+  #         cache: false
+  #   plots:
+  #     - results/confusion_matrix.json:
+  #         cache: false

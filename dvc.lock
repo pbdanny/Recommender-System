@@ -1,0 +1,53 @@
+schema: '2.0'
+stages:
+  preprocess:
+    cmd: uv run python src/data/preprocessing.py
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: 9a2f2af35a14eee33460c2655dff37e6.dir
+      size: 1979270
+      nfiles: 3
+    - path: src/data/preprocessing.py
+      hash: md5
+      md5: 084646a4cadb901f1778d52ae4d0fd8d
+      size: 1326
+    params:
+      params.yaml:
+        preprocess.random_state: 42
+        preprocess.train_size: 0.8
+    outs:
+    - path: data/processed/testset.pkl
+      hash: md5
+      md5: 597ce0f005a38625a567a1ecdbfafa6c
+      size: 455482
+    - path: data/processed/trainset.pkl
+      hash: md5
+      md5: 8b9320a3d53de703824d3615d163c856
+      size: 2216388
+  train:
+    cmd: uv run python src/models/batch_train.py
+    deps:
+    - path: data/processed/trainset.pkl
+      hash: md5
+      md5: 8b9320a3d53de703824d3615d163c856
+      size: 2216388
+    - path: src/models/batch_train.py
+      hash: md5
+      md5: 2a88a3ae9e8650716f57795b886fcbca
+      size: 6777
+    params:
+      params.yaml:
+        train.lr_all: 0.005
+        train.n_epochs: 20
+        train.n_factors: 50
+        train.reg_all: 0.02
+    outs:
+    - path: metrics.json
+      hash: md5
+      md5: 194855078612e7a9fa32ad2251e55421
+      size: 32
+    - path: models/model.pkl
+      hash: md5
+      md5: 66cd9a4b67b4252e7044d901f8b6a60f
+      size: 3275476

@@ -1,0 +1,13 @@
+preprocess:
+  train_size: 0.8
+  random_state: 42
+
+train:
+  n_factors: 50
+  n_epochs: 20
+  lr_all: 0.005
+  reg_all: 0.02
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "RecSys-DVC"

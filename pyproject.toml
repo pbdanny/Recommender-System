@@ -1,7 +1,7 @@
 [project]
-name = "qa-reccom"
+name = "recommender-system"
 version = "0.1.0"
-description = "Add your description here"
+description = "Recommender System"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -17,4 +17,16 @@ dependencies = [
     "scikit-learn>=1.7.2",
     "scikit-surprise>=1.1.4",
     "uvicorn>=0.38.0",
-]
+    "pyyaml>=6.0",
+    ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0"
+    ]
+# ---- Comment out build-system ----
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
