@@ -34,8 +34,8 @@ stages:
       size: 2216388
     - path: src/models/batch_train.py
       hash: md5
-      md5: 2a88a3ae9e8650716f57795b886fcbca
-      size: 6777
+      md5: d0c03eb51f970df13dcb1cb267aed032
+      size: 6767
     params:
       params.yaml:
         train.lr_all: 0.005
@@ -45,9 +45,24 @@ stages:
     outs:
     - path: metrics.json
       hash: md5
-      md5: 194855078612e7a9fa32ad2251e55421
+      md5: 3136ee09b17dabccc3028af2306b65cc
       size: 32
     - path: models/model.pkl
       hash: md5
-      md5: 66cd9a4b67b4252e7044d901f8b6a60f
+      md5: acdf8a06da56dd45a914461a388c69dd
       size: 3275476
+  batch_predict:
+    cmd: uv run python src/models/predict.py
+    deps:
+    - path: data/processed/trainset.pkl
+      hash: md5
+      md5: 8b9320a3d53de703824d3615d163c856
+      size: 2216388
+    - path: models/model.pkl
+      hash: md5
+      md5: acdf8a06da56dd45a914461a388c69dd
+      size: 3275476
+    - path: src/models/predict.py
+      hash: md5
+      md5: a1b73a687bb200391cc31105c6786510
+      size: 3551

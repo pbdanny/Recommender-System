@@ -27,8 +27,12 @@ class HybridRecSys:
     @bentoml.api
     def recommend(self, user_id: str) -> Dict[str, Any]:
         
-        # Use the class instance's redis client
-        candidates_json = self.redis_client.get(f"rec:batch:{user_id}")
+        try:
+            # Use the class instance's redis client
+            candidates_json = self.redis_client.get(f"rec:batch:{user_id}")
+        except redis.exceptions.ConnectionError:
+            print(f"Warning: Could not connect to Redis. Returning fallback.")
+            candidates_json = None
         
         if not candidates_json:
              # Fallback logic

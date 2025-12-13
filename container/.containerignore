@@ -1,0 +1,11 @@
+.git
+.dvc
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+data/raw
+data/processed
+mlruns
+notebooks
+.env

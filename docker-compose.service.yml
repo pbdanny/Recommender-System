@@ -6,6 +6,8 @@ services:
     image: ghcr.io/mlflow/mlflow:v3.6.0
     ports:
       - "5000:5000"
+    networks:
+      - recommender-system_default
     environment:
       - MLFLOW_SERVER_DEFAULT_ARTIFACT_ROOT=file:///mlflow/artifacts
     volumes:
@@ -21,12 +23,16 @@ services:
   prometheus:
     image: docker.io/prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "9091:9090"
+    networks:
+      - recommender-system_default
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:Z,U
       
   grafana:
     image: docker.io/grafana/grafana:latest
+    networks:
+      - recommender-system_default
     ports:
       - "3001:3000" # Use 3001 locally to avoid clash
     volumes:
@@ -35,7 +41,13 @@ services:
   # 3. Your Candidate Cache (KEY for scaling)
   redis:
     image: docker.io/redis:7
+    networks:
+      - recommender-system_default
     ports:
       - "6379:6379"
     volumes:
       - ./redis-data:/data:Z,U
+
+networks:
+  recommender-system_default:
+    external: true

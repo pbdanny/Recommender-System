@@ -11,3 +11,4 @@ train:
 mlflow:
   tracking_uri: "http://localhost:5000"
   experiment_name: "RecSys-DVC"
+  model_path: "models/model.pkl"

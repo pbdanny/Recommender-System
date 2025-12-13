@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  recsys-dvc:
+    image: localhost/recsys_dvc:v1.0.0
+    networks:
+      - recommender-system_default
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+
+networks:
+  recommender-system_default:
+    external: true

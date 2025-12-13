@@ -54,7 +54,7 @@ test_data = pickle.load(open(data_processed_path/'testset.pkl', 'rb'))
 # --- 2.2 MLflow tracking server
 MLFLOW_TRACKING_URI = "http://localhost:5000"
 mlflow.set_tracking_uri(mlflow_params['tracking_uri'] or MLFLOW_TRACKING_URI)
-EXPERIMENT_NAME = "Hybrid_RecSys_v3"
+EXPERIMENT_NAME = "RecSys-DVC"
 mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
 
 def train_model():
@@ -96,7 +96,7 @@ def train_model():
         
         mlflow.pyfunc.log_model(name="svd_candidate_model",
                                 python_model = SurpriseWrapper(), 
-                                artifacts={"model_path": "model.pkl"},
+                                artifacts={"model_path": mlflow_params['model_path']},
                                 signature=signature)
         
         mlflow.log_params(params)    
@@ -177,4 +177,3 @@ def batch_predict():
     
 if __name__ == "__main__":
     train_model()
-    batch_predict()

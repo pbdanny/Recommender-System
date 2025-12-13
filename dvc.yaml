@@ -26,7 +26,14 @@ stages:
     metrics:
       - metrics.json:
           cache: false
-
+          
+  batch_predict:
+    cmd: uv run python src/models/predict.py
+    deps:
+      - src/models/predict.py
+      - models/model.pkl
+      - data/processed/trainset.pkl
+      
   # evaluate:
   #   cmd: uv run python src/models/evaluate.py
   #   deps:
