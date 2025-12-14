@@ -1,6 +1,7 @@
+name: recsys_app
 version: '3.8'
 services:
-  recsys-dvc:
+  recsys_dvc:
     image: localhost/recsys_dvc:v1.0.0
     networks:
       - recommender-system_default
