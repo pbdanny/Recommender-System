@@ -9,6 +9,51 @@ from sklearn.metrics import (
 )
 import mlflow
 
+config_path = Path(__file__).parent.parent.parent / 'params.yaml'
+
+# --- HELPER: Load parameters from YAML ---
+def load_params():
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+# --- HELPER: Detect Environment ---
+def get_redis_host():
+    # If running inside a container (env var set), use service name 'redis'
+    # If running locally (VSCode), use 'localhost'
+    if os.environ.get('AM_I_IN_A_DOCKER_CONTAINER'):
+        return 'redis'
+    return 'localhost'
+
+def is_running_in_docker_env_var():
+    return os.environ.get('AM_I_IN_A_DOCKER_CONTAINER') == 'Yes'
+
+class ModelPredictor:
+    """Model predictor class for inference"""
+    
+    def __init__(self):
+        params = load_params()
+        mlflow_params = params['mlflow']
+        mlflow.set_tracking_uri(mlflow_params['tracking_uri'])
+        client = mlflow.tracking.MlflowClient()
+        experiment = client.get_experiment_by_name(mlflow_params['experiment_name'])
+        # find the latest model in the experiment
+        models = mlflow.search_logged_models(experiment_ids=[experiment.experiment_id], 
+                                            order_by = [{"field_name": "creation_time", "ascending": False}], 
+                                            max_results=1,
+                                            output_format="list")
+        # Check if any runs were found
+        if not models:
+            raise RuntimeError(f"No runs found for experiment '{mlflow_params['experiment_name']}'.")
+
+        latest_model = models[0]
+        model_uri = latest_model.artifact_location
+
+        # Load the production model we just logged
+        self.model = mlflow.pyfunc.load_model(model_uri)
+
+    def predict(self, predict_df):
+        return self.model.predict(predict_df)
+
 def evaluate_model():
     """Evaluate model on test set"""
     # Load model

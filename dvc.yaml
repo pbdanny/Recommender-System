@@ -12,9 +12,9 @@ stages:
       - data/processed/testset.pkl
 
   train:
-    cmd: uv run python src/models/batch_train.py
+    cmd: uv run python src/models/train.py
     deps:
-      - src/models/batch_train.py
+      - src/models/train.py
       - data/processed/trainset.pkl
     params:
       - train.n_factors

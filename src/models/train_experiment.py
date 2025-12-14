@@ -1,23 +1,49 @@
-#!/usr/bin/env python
-"""Script to run training experiments with different parameters"""
-
 import subprocess
 import yaml
 import json
 from pathlib import Path
 import itertools
 
+import mlflow
+import pickle
+from surprise import Dataset, Reader, SVD, accuracy
+from surprise.model_selection import train_test_split, cross_validate
+
+current_dir = Path.cwd()
+config_path = current_dir.parent.parent / 'params.yaml'
+data_processed_path = current_dir.parent.parent / 'data' / 'processed'
+model_path = current_dir.parent.parent / 'models'
+
+# --- HELPER: Load parameters from YAML ---
+def load_params():
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
 def update_params(params_dict):
     """Update params.yaml with new parameters"""
-    with open('params.yaml', 'w') as f:
+    with open(config_path, 'w') as f:
         yaml.dump(params_dict, f)
+
+# --- 1. LOAD PARAMETERS ---
+params = load_params()
+train_params = params['train']
+mlflow_params = params['mlflow']
+
+# --- MLflow tracking server
+MLFLOW_TRACKING_URI = "http://localhost:5000"
+mlflow.set_tracking_uri(mlflow_params['tracking_uri'] or MLFLOW_TRACKING_URI)
+EXPERIMENT_NAME = "RecSys-DVC"
+mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
+
+# --- 3. LOAD PROCESSED DATA ---
+train_data = pickle.load(open(data_processed_path/'trainset.pkl', 'rb'))
 
 def run_experiment(experiment_name, param_grid):
     """Run experiments with parameter grid"""
     results = []
     
     # Load base params
-    with open('params.yaml', 'r') as f:
+    with open(config_path, 'r') as f:
         base_params = yaml.safe_load(f)
     
     # Generate all combinations

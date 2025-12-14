@@ -114,66 +114,6 @@ def train_model():
         }
         with open('metrics.json', 'w') as f:
             json.dump(metrics, f, indent=2)
-
-# --- 3. BATCH Prediction : Load best model and generate candidates for ALL users ---
-
-# --- 3.1 Locate the production model and load ---
-def batch_predict():
-    client = mlflow.tracking.MlflowClient()
-    experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-
-    # find the latest model in the experiment
-    models = mlflow.search_logged_models(experiment_ids=[experiment.experiment_id], 
-                                        order_by = [{"field_name": "creation_time", "ascending": False}], 
-                                        max_results=1,
-                                        output_format="list")
-    # Check if any runs were found
-    if not models:
-        raise RuntimeError(f"No runs found for experiment '{EXPERIMENT_NAME}'.")
-
-    latest_model = models[0]
-    latest_model_id = latest_model.model_id
-    model_uri = latest_model.artifact_location
-
-    # --- 3.2. Generate Candidates for ALL users ---
-    print("Generating candidates...")
-
-    # Load the production model we just logged
-    model = mlflow.pyfunc.load_model(model_uri) 
-
-    all_items = [train_data.to_raw_iid(i) for i in train_data.all_items()]
-    all_users = [train_data.to_raw_uid(u) for u in train_data.all_users()]
-    # Just do one user for demo speed (User 196)
-    demo_users = ['196', '186']
-
-    candidates = {}
-    for uid in demo_users:
-        # 1. Create prediction DataFrame
-        predict_df = pd.DataFrame({'user': [uid]*len(all_items), 'item': all_items})
-        
-        # 2. Predict (Returns list of floats)
-        scores = model.predict(predict_df)
-        
-        # 3. FIX: Assign scores back to DataFrame to sort
-        predict_df['score'] = scores
-        
-        # 4. Sort and take top 500
-        top_items = predict_df.sort_values('score', ascending=False).head(500)['item'].tolist()
-        candidates[uid] = top_items
-        
-    # --- 4. CACHE TO REDIS ---
-    redis_host = get_redis_host()
-    print(f"Connecting to Redis at {redis_host}...")
-
-    try:
-        r = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
-        with r.pipeline() as pipe:
-            for uid, items in candidates.items():
-                pipe.set(f"rec:batch:{uid}", json.dumps(items))
-            pipe.execute()
-        print("Success: Candidates cached in Redis.")
-    except redis.ConnectionError:
-        print(f"FATAL: Could not connect to Redis at {redis_host}. Check podman-compose ps.")
-    
+ 
 if __name__ == "__main__":
     train_model()
