@@ -8,13 +8,12 @@ import pandas as pd
 import mlflow
 from mlflow.models import infer_signature
 from surprise import Dataset, Reader, SVD, accuracy
-from surprise.model_selection import train_test_split
+from surprise.model_selection import train_test_split, cross_validate
 
-import redis
-
-config_path = Path(__file__).parent.parent.parent / 'params.yaml'
-data_processed_path = Path(__file__).parent.parent.parent / 'data' / 'processed'
-model_path = Path(__file__).parent.parent.parent / 'models'
+current_dir = Path(__file__).parent
+config_path = current_dir.parent.parent / 'params.yaml'
+data_processed_path = current_dir.parent.parent / 'data' / 'processed'
+model_path = current_dir.parent.parent / 'models'
 
 # --- HELPER: Load parameters from YAML ---
 def load_params():
@@ -37,9 +36,10 @@ params = load_params()
 train_params = params['train']
 mlflow_params = params['mlflow']
 
-# --- 1. LOAD PROCESSED DATA ---
-train_data = pickle.load(open(data_processed_path/'trainset.pkl', 'rb'))
-test_data = pickle.load(open(data_processed_path/'testset.pkl', 'rb'))
+# --- 3. LOAD PROCESSED DATA ---
+reader = Reader(line_format="user item rating timestamp", sep="\t")
+train_data = Dataset.load_from_file(data_processed_path/'train_data.data', reader=reader)
+trainset = train_data.build_full_trainset()
 
 # --- 2. Log with MLflow ---
 
@@ -54,18 +54,21 @@ test_data = pickle.load(open(data_processed_path/'testset.pkl', 'rb'))
 # --- 2.2 MLflow tracking server
 MLFLOW_TRACKING_URI = "http://localhost:5000"
 mlflow.set_tracking_uri(mlflow_params['tracking_uri'] or MLFLOW_TRACKING_URI)
-EXPERIMENT_NAME = "RecSys-DVC"
+EXPERIMENT_NAME = "RecSys-DVC-Production"
 mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
 
 def train_model():
     # --- 1. Train Model & Log with MLflow ---
 
-    with mlflow.start_run() as run:
+    with mlflow.start_run(run_name="prod_model") as run:
         # Create the SVD model
         # params = {"n_factors": 50, "n_epochs": 20, "lr_all": 0.005, "reg_all": 0.02}
         algo = SVD(**train_params)
+        mlflow.log_params(train_params)
+
         # Train
-        algo.fit(train_data)
+        # algo.fit(train_data)
+        score = cross_validate(algo, train_data, measures=["RMSE", "MAE"], cv=3, verbose=False)
 
         # Define a custom pyfunc model wrapper
         class SurpriseWrapper(mlflow.pyfunc.PythonModel):
@@ -81,9 +84,7 @@ def train_model():
                     for _, row in model_input.iterrows()
                 ]
                 return preds    
-        
-        print(f"Logging model to MLflow in experiment '{EXPERIMENT_NAME}'...")
-    
+            
         # Dump model as pickle before for mlflow to log
         with open(model_path/"model.pkl", "wb") as f:
             pickle.dump(algo, f)
@@ -94,26 +95,27 @@ def train_model():
         output_example = [algo.predict(uid="941", iid="1682").est]
         signature = infer_signature(input_example, output_example)
         
-        mlflow.pyfunc.log_model(name="svd_candidate_model",
+        mlflow.pyfunc.log_model(name="svd_production_model",
                                 python_model = SurpriseWrapper(), 
-                                artifacts={"model_path": mlflow_params['model_path']},
+                                artifacts={"model_path": str(model_path/"model.pkl")},
                                 signature=signature)
         
         mlflow.log_params(params)    
-        mlflow.log_metric("trainset_users", train_data.n_users)
-        mlflow.log_metric("trainset_items", train_data.n_items)
-        
-        # Log evaluation metric
-        predictions = algo.test(test_data)
-        rmse = accuracy.rmse(predictions)    
-        mlflow.log_metric("rmse", rmse)
-        
+        mlflow.log_metric("test_rmse", score['test_rmse'].mean())
+        mlflow.log_metric("test_mae", score['test_mae'].mean())        
+        mlflow.log_metric("trainset_users", train_data.build_full_trainset().n_users)
+        mlflow.log_metric("trainset_items", train_data.build_full_trainset().n_items)
+                
         # Save metrics for DVC
         metrics = {
-            'rmse': rmse,
+            'test_rmse': score['test_rmse'].mean(),
+            'test_mae': score['test_mae'].mean()
         }
-        with open('metrics.json', 'w') as f:
+
+        with open(current_dir/'train_metrics.json', 'w') as f:
             json.dump(metrics, f, indent=2)
+
+    return None
  
 if __name__ == "__main__":
     train_model()

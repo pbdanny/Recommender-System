@@ -8,14 +8,14 @@ stages:
       - preprocess.train_size
       - preprocess.random_state
     outs:
-      - data/processed/trainset.pkl
-      - data/processed/testset.pkl
+      - data/processed/train_data.data
+      - data/processed/test_data.data
 
   train:
     cmd: uv run python src/models/train.py
     deps:
       - src/models/train.py
-      - data/processed/trainset.pkl
+      - data/processed/train_data.data
     params:
       - train.n_factors
       - train.n_epochs
@@ -24,16 +24,16 @@ stages:
     outs:
       - models/model.pkl
     metrics:
-      - metrics.json:
+      - train_metrics.json:
           cache: false
           
-  batch_predict:
-    cmd: uv run python src/models/predict.py
-    deps:
-      - src/models/predict.py
-      - models/model.pkl
-      - data/processed/trainset.pkl
-      
+  # batch_predict:
+  #   cmd: uv run python src/models/predict.py
+  #   deps:
+  #     - src/models/predict.py
+  #     - models/model.pkl
+  #     - data/processed/trainset.pkl
+    
   # evaluate:
   #   cmd: uv run python src/models/evaluate.py
   #   deps:

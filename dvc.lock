@@ -10,32 +10,32 @@ stages:
       nfiles: 3
     - path: src/data/preprocessing.py
       hash: md5
-      md5: 084646a4cadb901f1778d52ae4d0fd8d
-      size: 1326
+      md5: 8ce2b1ec1381fd170dc97c57c9d2280c
+      size: 1815
     params:
       params.yaml:
         preprocess.random_state: 42
         preprocess.train_size: 0.8
     outs:
-    - path: data/processed/testset.pkl
+    - path: data/processed/test_data.data
       hash: md5
-      md5: 597ce0f005a38625a567a1ecdbfafa6c
-      size: 455482
-    - path: data/processed/trainset.pkl
+      md5: 0e68d2b12c62f29663797d328a8144b7
+      size: 218730
+    - path: data/processed/train_data.data
       hash: md5
-      md5: 8b9320a3d53de703824d3615d163c856
-      size: 2216388
+      md5: 096c32b6d5bd38a0683e197828c708f6
+      size: 1960443
   train:
-    cmd: uv run python src/models/batch_train.py
+    cmd: uv run python src/models/train.py
     deps:
-    - path: data/processed/trainset.pkl
+    - path: data/processed/train_data.data
       hash: md5
-      md5: 8b9320a3d53de703824d3615d163c856
-      size: 2216388
-    - path: src/models/batch_train.py
+      md5: 096c32b6d5bd38a0683e197828c708f6
+      size: 1960443
+    - path: src/models/train.py
       hash: md5
-      md5: d0c03eb51f970df13dcb1cb267aed032
-      size: 6767
+      md5: 3e047ccc783f0678dd0050de91264ba8
+      size: 4611
     params:
       params.yaml:
         train.lr_all: 0.005
@@ -43,14 +43,14 @@ stages:
         train.n_factors: 50
         train.reg_all: 0.02
     outs:
-    - path: metrics.json
-      hash: md5
-      md5: 3136ee09b17dabccc3028af2306b65cc
-      size: 32
     - path: models/model.pkl
       hash: md5
-      md5: acdf8a06da56dd45a914461a388c69dd
-      size: 3275476
+      md5: 66ee29d0c5572a002e76f25e402954a2
+      size: 2707554
+    - path: train_metrics.json
+      hash: md5
+      md5: a2afc1c61a3239c42ff0ab4ca20f300f
+      size: 71
   batch_predict:
     cmd: uv run python src/models/predict.py
     deps:

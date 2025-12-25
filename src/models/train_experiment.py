@@ -5,11 +5,15 @@ from pathlib import Path
 import itertools
 
 import mlflow
+from mlflow.models import infer_signature
+import pandas as pd
 import pickle
 from surprise import Dataset, Reader, SVD, accuracy
-from surprise.model_selection import train_test_split, cross_validate
+from surprise.model_selection import train_test_split, cross_validate, GridSearchCV
 
-current_dir = Path.cwd()
+import optuna
+
+current_dir = Path(__file__).parent
 config_path = current_dir.parent.parent / 'params.yaml'
 data_processed_path = current_dir.parent.parent / 'data' / 'processed'
 model_path = current_dir.parent.parent / 'models'
@@ -36,75 +40,78 @@ EXPERIMENT_NAME = "RecSys-DVC"
 mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
 
 # --- 3. LOAD PROCESSED DATA ---
-train_data = pickle.load(open(data_processed_path/'trainset.pkl', 'rb'))
+reader = Reader(line_format="user item rating timestamp", sep="\t")
+train_data = Dataset.load_from_file(data_processed_path/'train_data.data', reader=reader)
+trainset = train_data.build_full_trainset()
 
-def run_experiment(experiment_name, param_grid):
-    """Run experiments with parameter grid"""
-    results = []
-    
-    # Load base params
-    with open(config_path, 'r') as f:
-        base_params = yaml.safe_load(f)
-    
-    # Generate all combinations
-    keys = param_grid.keys()
-    values = param_grid.values()
-    
-    for i, combination in enumerate(itertools.product(*values)):
-        print(f"\n{'='*60}")
-        print(f"Experiment {i+1}: {experiment_name}")
-        print(f"{'='*60}")
-        
-        # Update parameters
-        params = base_params.copy()
-        for key, value in zip(keys, combination):
-            # Navigate nested dict
-            keys_path = key.split('.')
-            current = params
-            for k in keys_path[:-1]:
-                current = current[k]
-            current[keys_path[-1]] = value
-        
-        # Update params file
-        update_params(params)
-        
-        # Run DVC pipeline
-        subprocess.run(['dvc', 'repro'], check=True)
-        
-        # Read results
-        with open('metrics.json', 'r') as f:
-            metrics = json.load(f)
-        
-        result = {
-            'params': {k: v for k, v in zip(keys, combination)},
-            'metrics': metrics
+def objective(trial):
+    """Objective function for Optuna hyperparameter optimization."""
+    with mlflow.start_run(nested=True, run_name="grid_search") as child_run:
+        n_factors = trial.suggest_int('n_factors', 20, 50)
+        n_epochs = trial.suggest_int('n_epochs', 10, 20)
+        lr_all = trial.suggest_float('lr_all', 0.02, 0.05)
+        reg_all = trial.suggest_float('reg_all', 0.4, 0.6)
+
+        params = {
+            'n_factors': n_factors,
+            'n_epochs': n_epochs,
+            'lr_all': lr_all,
+            'reg_all': reg_all
         }
-        results.append(result)
+        mlflow.log_params(params)
+
+        algo = SVD(**params)
+        # Train
+        score = cross_validate(algo, train_data, measures=["RMSE", "MAE"], cv=3, verbose=False)
+
+        # Define a custom pyfunc model wrapper
+        class SurpriseWrapper(mlflow.pyfunc.PythonModel):
+            def load_context(self, context):
+                import pickle
+                with open(context.artifacts["model_path"], "rb") as f:
+                    self.model = pickle.load(f)
+                    
+            def predict(self, context, model_input, params=None):
+                # model_input: DataFrame with columns ['user', 'item']
+                preds = [
+                    self.model.predict(uid=row["user"], iid=row["item"]).est
+                    for _, row in model_input.iterrows()
+                ]
+                return preds
+
+        # Dump model as pickle before for mlflow to log
+        with open(model_path/"model.pkl", "wb") as f:
+            pickle.dump(algo, f)
+
+        # Input should be a sample DataFrame, not a 'trainset' object
+        input_example = pd.DataFrame({"user": ["941"], "item": ["1682"]})
+        # Output should be a sample of what your predict() function returns
+        output_example = [algo.predict(uid="941", iid="1682").est]
+        signature = infer_signature(input_example, output_example)
         
-        print(f"Results: {metrics}")
-    
-    # Save all results
-    Path('experiments').mkdir(exist_ok=True)
-    with open(f'experiments/{experiment_name}_results.json', 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    print(f"\n✓ Completed {len(results)} experiments")
-    print(f"  Results saved to experiments/{experiment_name}_results.json")
-    
-    return results
+        mlflow.pyfunc.log_model(name="svd_candidate_model",
+                                python_model = SurpriseWrapper(), 
+                                artifacts={"model_path": str(model_path/"model.pkl")},
+                                signature=signature)
+        mlflow.log_metric("test_rmse", score['test_rmse'].mean())
+        mlflow.log_metric("test_mae", score['test_mae'].mean())
+        mlflow.log_metric("trainset_users", train_data.n_users)
+        mlflow.log_metric("trainset_items", train_data.n_items)
+
+        return score['test_rmse'].mean()
 
 if __name__ == "__main__":
-    # Example: hyperparameter tuning
-    param_grid = {
-        'train.n_estimators': [50, 100, 200],
-        'train.max_depth': [3, 5, 10],
-        'train.learning_rate': [0.01, 0.1]
-    }
-    
-    results = run_experiment('rf_tuning', param_grid)
-    
-    # Find best result
-    best = max(results, key=lambda x: x['metrics']['train_accuracy'])
-    print(f"\nBest configuration:")
-    print(f"  Params: {best['params']}")
-    print(f"  Accuracy: {best['metrics']['train_accuracy']:.4f}")
+    # Example: hyperparameter tuning with Optuna and MLflow logging
+    with mlflow.start_run(run_name="RecSys-DVC-Optuna") as run:
+        # Log the experiment settings
+        n_trials = 10
+        mlflow.log_param("n_trials", n_trials)
+
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=n_trials)
+
+        # Log the best trial and its run ID
+        mlflow.log_params(study.best_trial.params)
+        mlflow.log_metrics({"best_error": study.best_value})
+        if best_run_id := study.best_trial.user_attrs.get("run_id"):
+            mlflow.log_param("best_child_run_id", best_run_id)

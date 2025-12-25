@@ -23,6 +23,8 @@ htmlcov/
 /data/processed/*
 /models/*.pkl
 !/data/.gitkeep
+# Exception: track DVC metafiles within data/raw/
+!data/**/*.dvc
 
 # MLflow-specific files and directories
 mlruns/

@@ -22,18 +22,27 @@ def preprocess_data():
     # Load raw data
     reader = Reader(line_format='user item rating timestamp', sep='\t')
     data = Dataset.load_from_file(data_raw_path/'u.data', reader=reader)
+    raw_ratings = data.raw_ratings
     
-    # Basic preprocessing
-    # 
-    
-    # Split data
-    trainset, testset = train_test_split(data, train_size=params["train_size"], random_state=params["random_state"])
+    # Split data (https://surprise.readthedocs.io/en/stable/FAQ.html)
+    # Train & Tune = 90% of the data, Test = 10% of the data
+    threshold = int(0.9 * len(raw_ratings))
+    train_raw_ratings = raw_ratings[:threshold]
+    test_raw_ratings = raw_ratings[threshold:]
     
     # Save processed data
     data_processed_path.mkdir(parents=True, exist_ok=True)
     
-    pickle.dump(trainset, open(data_processed_path/'trainset.pkl', 'wb'))
-    pickle.dump(testset, open(data_processed_path/'testset.pkl', 'wb'))
+    with open(data_processed_path/'train_data.data', 'w') as f:
+        for line in train_raw_ratings:
+            f.write('\t'.join(str(s) for s in line) + '\n')
+
+    with open(data_processed_path/'test_data.data', 'w') as f:
+        for line in test_raw_ratings:
+            f.write('\t'.join(str(s) for s in line) + '\n')
+    
+    # pickle.dump(train_raw_ratings, open(data_processed_path/'train_data.pkl', 'wb'))
+    # pickle.dump(test_raw_ratings, open(data_processed_path/'test_data.pkl', 'wb'))
 
 if __name__ == "__main__":
     preprocess_data()
