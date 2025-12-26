@@ -75,13 +75,23 @@ def evaluate_model(champion_model=None, challenger_model=None):
     champion_rmse = ((test_df['rating'] - champion_preds) ** 2).mean() ** 0.5
     challenger_rmse = ((test_df['rating'] - challenger_preds) ** 2).mean() ** 0.5
 
+    # Create numpy arrays for NDCG calculation with user x item format
+    add_pred_df = test_df.copy()
+    add_pred_df['champion_pred'] = champion_preds
+    add_pred_df['challenger_pred'] = challenger_preds
+
+    y_actual = add_pred_df.pivot(index='user', columns='item', values='rating').fillna(0).to_numpy()
+    y_champion = add_pred_df.pivot(index='user', columns='item', values='champion_pred').fillna(0).to_numpy()
+    y_challenger = add_pred_df.pivot(index='user', columns='item', values='challenger_pred').fillna(0).to_numpy()
+
+
     # Calculate NDCG
-    champion_ndcg_all = ndcg_score([test_df['rating']], [champion_preds])
-    challenger_ndcg_all = ndcg_score([test_df['rating']], [challenger_preds])
+    champion_ndcg_all = ndcg_score(y_actual, y_champion)
+    challenger_ndcg_all = ndcg_score(y_actual, y_challenger)
 
    # Calculate NDCG at rank = 30
-    champion_ndcg_30 = ndcg_score([test_df['rating']], [champion_preds], k=30)
-    challenger_ndcg_30 = ndcg_score([test_df['rating']], [challenger_preds], k=30)
+    champion_ndcg_30 = ndcg_score(y_actual, y_champion, k=30)
+    challenger_ndcg_30 = ndcg_score(y_actual, y_challenger, k=30)
 
     print(f"Champion RMSE: {champion_rmse}")
     print(f"Challenger RMSE: {challenger_rmse}")

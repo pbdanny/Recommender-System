@@ -1,8 +1,8 @@
 {
   "champion_rmse": 0.9472791807028768,
   "challenger_rmse": 0.9633242014100732,
-  "champion_ndcg": 0.9862460072993812,
-  "challenger_ndcg": 0.9861419532331472,
-  "champion_ndcg_30": 0.9402023113176108,
-  "challenger_ndcg_30": 0.9399733006435199
+  "champion_ndcg": 0.9623843301178775,
+  "challenger_ndcg": 0.9620531523903935,
+  "champion_ndcg_30": 0.9581343347648801,
+  "challenger_ndcg_30": 0.9577485561553759
 }
