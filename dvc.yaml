@@ -24,15 +24,14 @@ stages:
     outs:
       - models/model.pkl
     metrics:
-      - train_metrics.json:
+      - src/models/train_metrics.json:
           cache: false
           
-  # batch_predict:
-  #   cmd: uv run python src/models/predict.py
-  #   deps:
-  #     - src/models/predict.py
-  #     - models/model.pkl
-  #     - data/processed/trainset.pkl
+  batch_predict:
+    cmd: uv run python src/models/predict.py
+    deps:
+      - src/models/predict.py
+      - data/processed/all_data.data
     
   # evaluate:
   #   cmd: uv run python src/models/evaluate.py

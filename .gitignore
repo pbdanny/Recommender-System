@@ -48,3 +48,6 @@ grafana-data/
 
 # Radis data directory
 redis-data/
+
+# Serve log files
+logs/

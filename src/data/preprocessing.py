@@ -41,6 +41,10 @@ def preprocess_data():
         for line in test_raw_ratings:
             f.write('\t'.join(str(s) for s in line) + '\n')
     
+    with open(data_processed_path/'all_data.data', 'w') as f:
+        for line in raw_ratings:
+            f.write('\t'.join(str(s) for s in line) + '\n')
+
     # pickle.dump(train_raw_ratings, open(data_processed_path/'train_data.pkl', 'wb'))
     # pickle.dump(test_raw_ratings, open(data_processed_path/'test_data.pkl', 'wb'))
 

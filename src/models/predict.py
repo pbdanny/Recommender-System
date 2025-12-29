@@ -9,7 +9,12 @@ import json
 import os
 import redis
 
-config_path = Path(__file__).parent.parent.parent / 'params.yaml'
+from surprise import Dataset, Reader
+
+current_dir = Path(__file__).parent
+config_path = current_dir.parent.parent / 'params.yaml'
+data_processed_path = current_dir.parent.parent / 'data' / 'processed'
+model_path = current_dir.parent.parent / 'models'
 
 # --- HELPER: Load parameters from YAML ---
 def load_params():
@@ -27,27 +32,28 @@ def get_redis_host():
 def is_running_in_docker_env_var():
     return os.environ.get('AM_I_IN_A_DOCKER_CONTAINER') == 'Yes'
 
+# --- LOAD PARAMETERS ---
+params = load_params()
+train_params = params['train']
+mlflow_params = params['mlflow']
+
+# --- 3. LOAD PROCESSED DATA ---
+reader = Reader(line_format="user item rating timestamp", sep="\t")
+all_data = Dataset.load_from_file(data_processed_path/'all_data.data', reader=reader)
+alldataset = all_data.build_full_trainset()
+
+# --- 2.2 MLflow tracking server
+MLFLOW_TRACKING_URI = "http://localhost:5000"
+mlflow.set_tracking_uri(mlflow_params['tracking_uri'] or MLFLOW_TRACKING_URI)
+EXPERIMENT_NAME = "RecSys-DVC-Evaluation"
+mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
+
 class ModelPredictor:
     """Model predictor class for inference"""
-    
-    def __init__(self):
-        params = load_params()
-        mlflow_params = params['mlflow']
-        mlflow.set_tracking_uri(mlflow_params['tracking_uri'])
-        client = mlflow.tracking.MlflowClient()
-        experiment = client.get_experiment_by_name(mlflow_params['experiment_name'])
+
+    def __init__(self, model_name, model_version="latest"):
         # find the latest model in the experiment
-        models = mlflow.search_logged_models(experiment_ids=[experiment.experiment_id], 
-                                            order_by = [{"field_name": "creation_time", "ascending": False}], 
-                                            max_results=1,
-                                            output_format="list")
-        # Check if any runs were found
-        if not models:
-            raise RuntimeError(f"No runs found for experiment '{mlflow_params['experiment_name']}'.")
-
-        latest_model = models[0]
-        model_uri = latest_model.artifact_location
-
+        model_uri = f"models:/{model_name}/{model_version}"
         # Load the production model we just logged
         self.model = mlflow.pyfunc.load_model(model_uri)
 
@@ -69,16 +75,14 @@ def cache_candidates(candidates):
         print(f"FATAL: Could not connect to Redis at {redis_host}. Check podman-compose ps.")
     
 
-def batch_predict():
+def batch_predict(data = alldataset):
     """Predict from CSV file"""
-    predictor = ModelPredictor()
+    predictor = ModelPredictor(model_name="svd_champion_model")
     
     # Load data
-    data_processed_path = Path(__file__).parent.parent.parent / 'data' / 'processed'
-    train_data = pickle.load(open(data_processed_path/'trainset.pkl', 'rb'))
-    all_items = [train_data.to_raw_iid(i) for i in train_data.all_items()]
-    all_users = [train_data.to_raw_uid(u) for u in train_data.all_users()]
-    
+    all_items = [data.to_raw_iid(i) for i in data.all_items()]
+    all_users = [data.to_raw_uid(u) for u in data.all_users()]
+
     candidates = {}
     for uid in all_users:
         # 1. Create prediction DataFrame
