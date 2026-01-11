@@ -11,6 +11,7 @@ services:
       - recommender-system_default
     environment:
       - MLFLOW_SERVER_DEFAULT_ARTIFACT_ROOT=file:///mlflow/artifacts
+      - MLFLOW_SERVER_ALLOWED_HOSTS=*
     volumes:
       - ./mlflow-data:/mlflow:Z,U
     command: >

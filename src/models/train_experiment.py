@@ -13,10 +13,18 @@ from surprise.model_selection import train_test_split, cross_validate, GridSearc
 
 import optuna
 
-current_dir = Path(__file__).parent
-config_path = current_dir.parent.parent / 'params.yaml'
-data_processed_path = current_dir.parent.parent / 'data' / 'processed'
-model_path = current_dir.parent.parent / 'models'
+# --- 1. PATHS ---
+# Change to use current working directory
+# current_dir = Path(__file__).parent
+# config_path = current_dir.parent.parent / 'params.yaml'
+# data_processed_path = current_dir.parent.parent / 'data' / 'processed'
+# model_path = current_dir.parent.parent / 'models'
+
+root_dir = Path.cwd()
+config_path = root_dir / 'params.yaml'
+data_processed_dir = root_dir / 'data' / 'processed'
+model_dir = root_dir / 'models'
+src_dir = root_dir / 'src'
 
 # --- HELPER: Load parameters from YAML ---
 def load_params():
@@ -41,7 +49,7 @@ mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
 
 # --- 3. LOAD PROCESSED DATA ---
 reader = Reader(line_format="user item rating timestamp", sep="\t")
-train_data = Dataset.load_from_file(data_processed_path/'train_data.data', reader=reader)
+train_data = Dataset.load_from_file(data_processed_dir/'train_data.data', reader=reader)
 trainset = train_data.build_full_trainset()
 
 def objective(trial):
@@ -80,7 +88,7 @@ def objective(trial):
                 return preds
 
         # Dump model as pickle before for mlflow to log
-        with open(model_path/"model.pkl", "wb") as f:
+        with open(model_dir/"model.pkl", "wb") as f:
             pickle.dump(algo, f)
 
         # Input should be a sample DataFrame, not a 'trainset' object
@@ -91,7 +99,7 @@ def objective(trial):
         
         mlflow.pyfunc.log_model(name="svd_candidate_model",
                                 python_model = SurpriseWrapper(), 
-                                artifacts={"model_path": str(model_path/"model.pkl")},
+                                artifacts={"model_path": str(model_dir/"model.pkl")},
                                 signature=signature)
         mlflow.log_metric("test_rmse", score['test_rmse'].mean())
         mlflow.log_metric("test_mae", score['test_mae'].mean())

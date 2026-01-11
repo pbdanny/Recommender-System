@@ -10,10 +10,18 @@ from mlflow.models import infer_signature
 from surprise import Dataset, Reader, SVD, accuracy
 from surprise.model_selection import train_test_split, cross_validate
 
-current_dir = Path(__file__).parent
-config_path = current_dir.parent.parent / 'params.yaml'
-data_processed_path = current_dir.parent.parent / 'data' / 'processed'
-model_path = current_dir.parent.parent / 'models'
+# --- 1. PATHS ---
+# Change to use current working directory
+# current_dir = Path(__file__).parent
+# config_path = current_dir.parent.parent / 'params.yaml'
+# data_processed_path = current_dir.parent.parent / 'data' / 'processed'
+# model_path = current_dir.parent.parent / 'models'
+
+root_dir = Path.cwd()
+config_path = root_dir / 'params.yaml'
+data_processed_dir = root_dir / 'data' / 'processed'
+model_dir = root_dir / 'models'
+src_dir = root_dir / 'src'
 
 # --- HELPER: Load parameters from YAML ---
 def load_params():
@@ -38,7 +46,7 @@ mlflow_params = params['mlflow']
 
 # --- 3. LOAD PROCESSED DATA ---
 reader = Reader(line_format="user item rating timestamp", sep="\t")
-train_data = Dataset.load_from_file(data_processed_path/'train_data.data', reader=reader)
+train_data = Dataset.load_from_file(data_processed_dir/'train_data.data', reader=reader)
 trainset = train_data.build_full_trainset()
 
 # --- 2. Log with MLflow ---
@@ -86,7 +94,7 @@ def train_model():
                 return preds    
             
         # Dump model as pickle before for mlflow to log
-        with open(model_path/"model.pkl", "wb") as f:
+        with open(model_dir/"model.pkl", "wb") as f:
             pickle.dump(algo, f)
     
         # Input should be a sample DataFrame, not a 'trainset' object
@@ -97,7 +105,7 @@ def train_model():
         
         mlflow.pyfunc.log_model(name="svd_production_model",
                                 python_model = SurpriseWrapper(), 
-                                artifacts={"model_path": str(model_path/"model.pkl")},
+                                artifacts={"model_path": str(model_dir/"model.pkl")},
                                 signature=signature)
         
         mlflow.log_params(params)    
@@ -112,7 +120,7 @@ def train_model():
             'test_mae': score['test_mae'].mean()
         }
 
-        with open(current_dir/'train_metrics.json', 'w') as f:
+        with open(src_dir/'train_metrics.json', 'w') as f:
             json.dump(metrics, f, indent=2)
 
     return None

@@ -11,10 +11,18 @@ import redis
 
 from surprise import Dataset, Reader
 
-current_dir = Path(__file__).parent
-config_path = current_dir.parent.parent / 'params.yaml'
-data_processed_path = current_dir.parent.parent / 'data' / 'processed'
-model_path = current_dir.parent.parent / 'models'
+# --- 1. PATHS ---
+# Change to use current working directory
+# current_dir = Path(__file__).parent
+# config_path = current_dir.parent.parent / 'params.yaml'
+# data_processed_path = current_dir.parent.parent / 'data' / 'processed'
+# model_path = current_dir.parent.parent / 'models'
+
+root_dir = Path.cwd()
+config_path = root_dir / 'params.yaml'
+data_processed_dir = root_dir / 'data' / 'processed'
+model_dir = root_dir / 'models'
+src_dir = root_dir / 'src'
 
 # --- HELPER: Load parameters from YAML ---
 def load_params():
@@ -37,19 +45,14 @@ params = load_params()
 train_params = params['train']
 mlflow_params = params['mlflow']
 
-# --- 3. LOAD PROCESSED DATA ---
-reader = Reader(line_format="user item rating timestamp", sep="\t")
-all_data = Dataset.load_from_file(data_processed_path/'all_data.data', reader=reader)
-alldataset = all_data.build_full_trainset()
-
-# --- 2.2 MLflow tracking server
-MLFLOW_TRACKING_URI = "http://localhost:5000"
-mlflow.set_tracking_uri(mlflow_params['tracking_uri'] or MLFLOW_TRACKING_URI)
-EXPERIMENT_NAME = "RecSys-DVC-Evaluation"
-mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
-
 class ModelPredictor:
     """Model predictor class for inference"""
+
+    # --- 2.2 MLflow tracking server
+    MLFLOW_TRACKING_URI = "http://localhost:5000"
+    mlflow.set_tracking_uri(mlflow_params['tracking_uri'] or MLFLOW_TRACKING_URI)
+    EXPERIMENT_NAME = "RecSys-DVC"
+    mlflow.set_experiment(mlflow_params['experiment_name'] or EXPERIMENT_NAME)
 
     def __init__(self, model_name, model_version="latest"):
         # find the latest model in the experiment
@@ -75,13 +78,18 @@ def cache_candidates(candidates):
         print(f"FATAL: Could not connect to Redis at {redis_host}. Check podman-compose ps.")
     
 
-def batch_predict(data = alldataset):
+def batch_predict():
+    # --- 3. LOAD PROCESSED DATA ---
+    reader = Reader(line_format="user item rating timestamp", sep="\t")
+    all_data = Dataset.load_from_file(data_processed_dir/'all_data.data', reader=reader)
+    alldataset = all_data.build_full_trainset()
+
     """Predict from CSV file"""
-    predictor = ModelPredictor(model_name="svd_champion_model")
+    predictor = ModelPredictor(model_name="svd_production_model")
     
     # Load data
-    all_items = [data.to_raw_iid(i) for i in data.all_items()]
-    all_users = [data.to_raw_uid(u) for u in data.all_users()]
+    all_items = [alldataset.to_raw_iid(i) for i in alldataset.all_items()]
+    all_users = [alldataset.to_raw_uid(u) for u in alldataset.all_users()]
 
     candidates = {}
     for uid in all_users:

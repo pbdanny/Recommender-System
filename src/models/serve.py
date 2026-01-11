@@ -13,31 +13,11 @@ import json
 import redis
 from contextlib import asynccontextmanager
 
-# Import the existing ModelPredictor which loads the mlflow/Surprise pyfunc and helper
-from predict import ModelPredictor, alldataset, get_redis_host
+from src.models.predict import ModelPredictor, get_redis_host
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="ML Model Serving API",
-    description="Production-ready ML model serving with monitoring and logging (Surprise recommender)",
-    version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Global model predictor (adapter)
 predictor: Optional[Any] = None
@@ -50,9 +30,7 @@ prediction_stats = {
     "start_time": datetime.now().isoformat()
 }
 
-
 # ========== Redis helpers ==========
-
 def get_redis_client():
     host = get_redis_host()
     try:
@@ -81,7 +59,6 @@ def fetch_cached_recommendations(user: str, k: int):
     except Exception as e:
         logger.error(f"Error fetching cache for user {user}: {e}")
         return None
-
 
 # ========== Adapter for Surprise-based predictor ==========
 
@@ -130,7 +107,6 @@ class SurpriseAdapter:
         predict_df['score'] = scores
         top = predict_df.sort_values('score', ascending=False).head(k)
         return top['item'].tolist(), top['score'].tolist()
-
 
 # ========== Pydantic Models (adjusted for recommender) ==========
 
@@ -192,25 +168,6 @@ class ErrorResponse(BaseModel):
     detail: str
     timestamp: str
 
-
-# ========== Startup/Shutdown Events ==========
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global predictor
-    try:
-        logger.info("Loading Surprise-based model...")
-        predictor = SurpriseAdapter(model_name="svd_production_model")
-        logger.info("✓ Model loaded successfully")
-        yield
-    except Exception as e:
-        logger.error(f"✗ Failed to load model: {str(e)}")
-        predictor = None
-        yield
-    finally:
-        logger.info("Shutting down API...")
-
-
 # ========== Helper Functions ==========
 
 def log_prediction(input_size: int, latency_ms: float, success: bool):
@@ -232,6 +189,41 @@ async def save_prediction_log(data: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Failed to save prediction log: {str(e)}")
 
+
+# ========== Startup/Shutdown Events ==========
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global predictor
+    try:
+        logger.info("Loading Surprise-based model...")
+        predictor = SurpriseAdapter(model_name="svd_production_model")
+        logger.info("✓ Model loaded successfully")
+        yield
+    except Exception as e:
+        logger.error(f"✗ Failed to load model: {str(e)}")
+        predictor = None
+        yield
+    finally:
+        logger.info("Shutting down API...")
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="ML Model Serving API",
+    description="Production-ready ML model serving with monitoring and logging (Surprise recommender)",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+    )
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ========== API Endpoints ==========
 

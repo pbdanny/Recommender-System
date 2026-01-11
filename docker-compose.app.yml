@@ -1,8 +1,8 @@
 name: recsys_app
 version: '3.8'
 services:
-  recsys_dvc:
-    image: localhost/recsys_dvc:v1.0.0
+  ml-app:
+    image: localhost/recsys_dvc:v1.0.1
     networks:
       - recommender-system_default
     ports:
@@ -10,6 +10,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+    restart: on-failure:5
 
 networks:
   recommender-system_default:

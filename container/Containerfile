@@ -1,4 +1,3 @@
-
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -6,22 +5,35 @@ WORKDIR /app
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
-RUN pip install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy project files
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock* ./
+
+# Install dependencies
+RUN uv pip install --system --no-cache -r pyproject.toml
+
+# 3. Copy source code and project files
 COPY src/ ./src/
 COPY models/ ./models/
 COPY params.yaml ./params.yaml
 
-# Install dependencies
-RUN uv pip install --system -e .
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Expose port for API
 EXPOSE 8000
 
 # Run inference service
-CMD ["python", "-m", "src.models.serve"]
+CMD ["uvicorn", "src.models.serve:app", "--host", "0.0.0.0", "--port", "8000"]
